@@ -28,7 +28,7 @@ tasks:
         cd /tmp/repo/dbt/github_analytics
         export DBT_PROFILES_DIR=/tmp/repo/dbt/github_analytics
         dbt deps --quiet
-        dbt run  --target prod --profiles-dir $DBT_PROFILES_DIR
+        dbt run  --target prod --profiles-dir $DBT_PROFILES_DIR --full-refresh
         dbt test --target prod --profiles-dir $DBT_PROFILES_DIR
 
 triggers:

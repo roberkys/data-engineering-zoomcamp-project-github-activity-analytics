@@ -22,3 +22,5 @@ from {{ source('github_archive_raw', 'events') }}
 where
     created_at is not null
     and type is not null
+
+qualify row_number() over (partition by id order by created_at) = 1
