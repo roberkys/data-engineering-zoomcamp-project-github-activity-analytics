@@ -13,7 +13,7 @@ tasks:
     beforeCommands:
       - apt-get update -qq && apt-get install -y -qq git > /dev/null
       - pip install -q dbt-bigquery
-      - GIT_TERMINAL_PROMPT=0 git clone --depth 1 "{{ kv('GITHUB_REPO_URL') }}" /tmp/repo
+      - git -c credential.helper= clone --depth 1 "{{ kv('GITHUB_REPO_URL') }}" /tmp/repo
       - printf '%s' "$GCP_CREDS" > /tmp/sa_key.json
     env:
       GCP_CREDS: "{{ kv('GCP_CREDS') }}"
@@ -21,6 +21,8 @@ tasks:
       GCP_LOCATION: "{{ kv('GCP_LOCATION') }}"
       GCP_DATASET_DWH: "{{ kv('GCP_DATASET_DWH') }}"
       GCP_DATASET_RAW: "{{ kv('GCP_DATASET_RAW') }}"
+      GIT_TERMINAL_PROMPT: "0"
+      GIT_ASKPASS: "echo"
     commands:
       - |
         cd /tmp/repo/dbt/github_analytics

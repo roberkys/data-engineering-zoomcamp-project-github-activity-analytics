@@ -1,7 +1,6 @@
 {{
     config(
-        materialized = 'table',
-        cluster_by   = ['event_type']
+        materialized = 'view'
     )
 }}
 
