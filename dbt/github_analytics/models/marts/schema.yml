@@ -1,0 +1,66 @@
+version: 2
+
+models:
+  - name: fct_daily_activity
+    description: >
+      Daily GitHub event counts per event type.
+      Partitioned by event_date, clustered by event_type.
+      Used for the temporal line chart on the dashboard.
+    columns:
+      - name: event_date
+        description: "Calendar date of the events"
+        tests:
+          - not_null
+      - name: event_type
+        description: "GitHub event type"
+        tests:
+          - not_null
+      - name: event_count
+        description: "Total number of events for this date and type"
+        tests:
+          - not_null
+      - name: unique_actors
+        description: "Number of distinct GitHub users who triggered events"
+      - name: unique_repos
+        description: "Number of distinct repositories involved"
+
+  - name: fct_event_type_distribution
+    description: >
+      Aggregate event counts and percentages per event type across the full dataset.
+      Used for the categorical distribution chart on the dashboard.
+    columns:
+      - name: event_type
+        description: "GitHub event type"
+        tests:
+          - not_null
+          - unique
+      - name: total_events
+        description: "Total events of this type across all dates"
+        tests:
+          - not_null
+      - name: pct_of_total
+        description: "Share of all events (0-100)"
+      - name: unique_actors
+        description: "Distinct actors who generated this event type"
+      - name: unique_repos
+        description: "Distinct repositories involved in this event type"
+
+  - name: fct_top_repos
+    description: >
+      Most active repositories per event type.
+      Useful for leaderboard or drill-down analysis.
+    columns:
+      - name: repo_name
+        description: "Full repository name (owner/repo)"
+        tests:
+          - not_null
+      - name: repo_owner
+        description: "Repository owner"
+      - name: event_type
+        description: "GitHub event type"
+        tests:
+          - not_null
+      - name: event_count
+        description: "Number of events for this repo and type"
+      - name: unique_contributors
+        description: "Number of distinct actors who contributed"

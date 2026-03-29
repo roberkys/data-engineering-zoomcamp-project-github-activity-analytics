@@ -1,0 +1,27 @@
+# Terraform
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
+terraform/*.tfvars
+!terraform/terraform.tfvars.example
+
+# dbt
+dbt/github_analytics/target/
+dbt/github_analytics/dbt_packages/
+dbt/github_analytics/logs/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.env
+
+# GCP credentials - NEVER commit these
+keys/
+*.json
+!dbt/github_analytics/packages.yml
+
+# IDE
+.vscode/
+.idea/

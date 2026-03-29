@@ -1,0 +1,42 @@
+id: 01_setup_kv
+namespace: github_analytics
+description: |
+  Run this flow once to populate all KV-store variables.
+  Set GCP_CREDS as a Kestra Secret (Settings → Secrets) before running.
+
+tasks:
+  - id: gcp_project_id
+    type: io.kestra.plugin.core.kv.Set
+    key: GCP_PROJECT_ID
+    kvType: STRING
+    value: kestra-sandbox-486201
+
+  - id: gcp_location
+    type: io.kestra.plugin.core.kv.Set
+    key: GCP_LOCATION
+    kvType: STRING
+    value: US
+
+  - id: gcp_bucket_name
+    type: io.kestra.plugin.core.kv.Set
+    key: GCP_BUCKET_NAME
+    kvType: STRING
+    value: github-archive-kestra-sandbox-486201
+
+  - id: gcp_dataset_raw
+    type: io.kestra.plugin.core.kv.Set
+    key: GCP_DATASET_RAW
+    kvType: STRING
+    value: github_archive_raw
+
+  - id: gcp_dataset_dwh
+    type: io.kestra.plugin.core.kv.Set
+    key: GCP_DATASET_DWH
+    kvType: STRING
+    value: github_analytics_dwh
+
+  - id: github_repo_url
+    type: io.kestra.plugin.core.kv.Set
+    key: GITHUB_REPO_URL
+    kvType: STRING
+    value: "https://github.com/roberkys/data-engineering-zoomcamp-project-github-activity-analytics.git"

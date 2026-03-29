@@ -1,0 +1,5 @@
+credentials_file = "../keys/sa_key.json"
+project          = "your-gcp-project-id"
+region           = "us-east1"
+location         = "US"
+gcs_bucket_name  = "github-archive-your-project-id"

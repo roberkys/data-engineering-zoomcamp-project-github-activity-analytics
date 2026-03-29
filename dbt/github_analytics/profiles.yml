@@ -1,0 +1,24 @@
+github_analytics:
+  target: dev
+  outputs:
+
+    # Local development: uses application default credentials (gcloud auth application-default login)
+    dev:
+      type: bigquery
+      method: oauth
+      project: "{{ env_var('GCP_PROJECT') }}"
+      dataset: "{{ env_var('GCP_DATASET_DWH', 'github_analytics_dwh') }}"
+      location: "{{ env_var('GCP_LOCATION', 'US') }}"
+      threads: 4
+      timeout_seconds: 300
+
+    # CI / Kestra: service-account keyfile written to /tmp/sa_key.json by the flow
+    prod:
+      type: bigquery
+      method: service-account
+      project: "{{ env_var('GCP_PROJECT') }}"
+      dataset: "{{ env_var('GCP_DATASET_DWH', 'github_analytics_dwh') }}"
+      keyfile: /tmp/sa_key.json
+      location: "{{ env_var('GCP_LOCATION', 'US') }}"
+      threads: 4
+      timeout_seconds: 300

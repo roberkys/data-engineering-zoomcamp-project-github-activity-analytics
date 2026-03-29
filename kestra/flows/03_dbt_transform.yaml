@@ -1,0 +1,41 @@
+id: 03_dbt_transform
+namespace: github_analytics
+description: |
+  Clones the project repo and runs the dbt transformation models
+  that build the analytics layer on top of the raw events table.
+  Triggered automatically after 02_ingest, or run manually.
+
+tasks:
+  - id: dbt_run
+    type: io.kestra.plugin.scripts.shell.Commands
+    description: "Install dbt, clone repo, run models and tests"
+    containerImage: python:3.12-slim
+    beforeCommands:
+      - apt-get update -qq && apt-get install -y -qq git > /dev/null
+      - pip install -q dbt-bigquery
+      - git clone --depth 1 "{{ kv('GITHUB_REPO_URL') }}" /tmp/repo
+      - printf '%s' "$GCP_CREDS" > /tmp/sa_key.json
+    env:
+      GCP_CREDS: "{{ kv('GCP_CREDS') }}"
+      GCP_PROJECT: "{{ kv('GCP_PROJECT_ID') }}"
+      GCP_LOCATION: "{{ kv('GCP_LOCATION') }}"
+      GCP_DATASET_DWH: "{{ kv('GCP_DATASET_DWH') }}"
+      GCP_DATASET_RAW: "{{ kv('GCP_DATASET_RAW') }}"
+    commands:
+      - |
+        cd /tmp/repo/dbt/github_analytics
+        export DBT_PROFILES_DIR=/tmp/repo/dbt/github_analytics
+        dbt deps --quiet
+        dbt run  --target prod --profiles-dir $DBT_PROFILES_DIR
+        dbt test --target prod --profiles-dir $DBT_PROFILES_DIR
+
+triggers:
+  - id: after_ingest
+    type: io.kestra.plugin.core.trigger.Flow
+    conditions:
+      - type: io.kestra.plugin.core.condition.ExecutionFlowCondition
+        namespace: github_analytics
+        flowId: 02_ingest
+      - type: io.kestra.plugin.core.condition.ExecutionStatusCondition
+        in:
+          - SUCCESS

@@ -1,0 +1,57 @@
+version: 2
+
+sources:
+  - name: github_archive_raw
+    description: "Raw GitHub Archive events ingested by the Kestra pipeline"
+    database: "{{ env_var('GCP_PROJECT') }}"
+    schema: github_archive_raw
+    tables:
+      - name: events
+        description: "Partitioned (DAY/created_at) and clustered (type, repo_name) raw events table"
+        columns:
+          - name: id
+            description: "Unique event ID assigned by GitHub"
+          - name: type
+            description: "GitHub event type (PushEvent, PullRequestEvent, etc.)"
+          - name: created_at
+            description: "UTC timestamp when the event occurred"
+          - name: public
+            description: "Whether the event is publicly visible"
+          - name: actor_login
+            description: "GitHub username of the actor"
+          - name: actor_id
+            description: "Numeric GitHub user ID of the actor"
+          - name: repo_name
+            description: "Repository full name in owner/repo format"
+          - name: repo_id
+            description: "Numeric GitHub repository ID"
+
+models:
+  - name: stg_github_events
+    description: "Cleaned and enriched view over raw GitHub Archive events"
+    columns:
+      - name: event_id
+        description: "Unique event identifier"
+        tests:
+          - not_null
+          - unique
+      - name: event_type
+        description: "GitHub event type"
+        tests:
+          - not_null
+      - name: event_timestamp
+        description: "UTC event timestamp"
+        tests:
+          - not_null
+      - name: event_date
+        description: "Date portion of the event timestamp (used for partitioning)"
+        tests:
+          - not_null
+      - name: actor_login
+        description: "GitHub username"
+      - name: repo_name
+        description: "Full repository name (owner/repo)"
+      - name: repo_owner
+        description: "Repository owner extracted from repo_name"
+      - name: repo_short_name
+        description: "Repository short name extracted from repo_name"

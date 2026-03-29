@@ -1,0 +1,104 @@
+id: 04_backfill
+namespace: github_analytics
+description: |
+  Historical backfill: downloads and loads GitHub Archive data
+  for every day in [start_date, end_date] (inclusive) directly
+  into BigQuery — no GCS required.
+
+inputs:
+  - id: start_date
+    type: DATE
+    description: "First date to backfill (inclusive)"
+    defaults: "2025-01-01"
+
+  - id: end_date
+    type: DATE
+    description: "Last date to backfill (inclusive)"
+    defaults: "2025-01-07"
+
+tasks:
+  - id: backfill
+    type: io.kestra.plugin.scripts.python.Script
+    description: "Iterate over date range and load each day directly into BigQuery"
+    containerImage: python:3.12-slim
+    timeout: PT6H
+    beforeCommands:
+      - pip install -q requests google-cloud-bigquery
+    env:
+      GCP_CREDS: "{{ kv('GCP_CREDS') }}"
+      GCP_DATASET_RAW: "{{ kv('GCP_DATASET_RAW') }}"
+      START_DATE: "{{ inputs.start_date }}"
+      END_DATE: "{{ inputs.end_date }}"
+    script: |
+      import os, json, gzip, io, requests
+      from datetime import date, timedelta
+      from google.cloud import bigquery
+      from google.oauth2 import service_account
+
+      sa_info    = json.loads(os.environ["GCP_CREDS"])
+      credentials = service_account.Credentials.from_service_account_info(sa_info)
+      project    = sa_info["project_id"]
+      bq         = bigquery.Client(credentials=credentials, project=project)
+      table_ref  = f"{project}.{os.environ['GCP_DATASET_RAW']}.events"
+
+      job_config = bigquery.LoadJobConfig(
+          write_disposition = bigquery.WriteDisposition.WRITE_APPEND,
+          schema = [
+              bigquery.SchemaField("id",          "STRING"),
+              bigquery.SchemaField("type",        "STRING"),
+              bigquery.SchemaField("created_at",  "TIMESTAMP"),
+              bigquery.SchemaField("public",      "BOOLEAN"),
+              bigquery.SchemaField("actor_login", "STRING"),
+              bigquery.SchemaField("actor_id",    "INTEGER"),
+              bigquery.SchemaField("repo_name",   "STRING"),
+              bigquery.SchemaField("repo_id",     "INTEGER"),
+          ],
+      )
+
+      start   = date.fromisoformat(os.environ["START_DATE"])
+      end     = date.fromisoformat(os.environ["END_DATE"])
+      current = start
+
+      while current <= end:
+          date_str  = str(current)
+          day_total = 0
+          print(f"\n{'='*50}\nProcessing {date_str} ...")
+
+          for hour in range(24):
+              url = f"https://data.gharchive.org/{date_str}-{hour}.json.gz"
+              try:
+                  resp = requests.get(url, timeout=120)
+                  if resp.status_code != 200:
+                      print(f"  [{hour:02d}:00] Skipped: HTTP {resp.status_code}")
+                      continue
+
+                  rows = []
+                  with gzip.open(io.BytesIO(resp.content)) as f:
+                      for line in f:
+                          try:
+                              e = json.loads(line)
+                              rows.append({
+                                  "id":          e.get("id"),
+                                  "type":        e.get("type"),
+                                  "created_at":  e.get("created_at"),
+                                  "public":      e.get("public"),
+                                  "actor_login": (e.get("actor") or {}).get("login"),
+                                  "actor_id":    (e.get("actor") or {}).get("id"),
+                                  "repo_name":   (e.get("repo") or {}).get("name"),
+                                  "repo_id":     (e.get("repo") or {}).get("id"),
+                              })
+                          except Exception:
+                              pass
+
+                  if rows:
+                      job = bq.load_table_from_json(rows, table_ref, job_config=job_config)
+                      job.result()
+                      day_total += len(rows)
+
+              except Exception as ex:
+                  print(f"  [{hour:02d}:00] Error: {ex}")
+
+          print(f"  Loaded {day_total:,} events for {date_str}")
+          current += timedelta(days=1)
+
+      print("\nBackfill complete.")

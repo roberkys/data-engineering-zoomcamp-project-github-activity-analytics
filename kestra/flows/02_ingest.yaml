@@ -1,0 +1,99 @@
+id: 02_ingest
+namespace: github_analytics
+description: |
+  Downloads 24 hourly GitHub Archive files for a given date,
+  flattens the JSON events and loads them directly into the
+  raw BigQuery partitioned+clustered table (no GCS required).
+
+inputs:
+  - id: date
+    type: DATE
+    description: "Date to ingest (defaults to yesterday UTC)"
+    defaults: "{{ execution.startDate | dateAdd(-1, 'DAYS') | date('yyyy-MM-dd') }}"
+
+tasks:
+  - id: label
+    type: io.kestra.plugin.core.execution.Labels
+    labels:
+      date: "{{ inputs.date }}"
+
+  - id: download_and_load_to_bq
+    type: io.kestra.plugin.scripts.python.Script
+    description: "Download GH Archive hourly files and load directly into BigQuery"
+    containerImage: python:3.12-slim
+    beforeCommands:
+      - pip install -q requests google-cloud-bigquery
+    env:
+      GCP_CREDS: "{{ kv('GCP_CREDS') }}"
+      INGEST_DATE: "{{ inputs.date }}"
+      GCP_DATASET_RAW: "{{ kv('GCP_DATASET_RAW') }}"
+    script: |
+      import os, json, gzip, io, requests
+      from google.cloud import bigquery
+      from google.oauth2 import service_account
+
+      sa_info    = json.loads(os.environ["GCP_CREDS"])
+      credentials = service_account.Credentials.from_service_account_info(sa_info)
+      project    = sa_info["project_id"]
+      bq         = bigquery.Client(credentials=credentials, project=project)
+      table_ref  = f"{project}.{os.environ['GCP_DATASET_RAW']}.events"
+      date       = os.environ["INGEST_DATE"]
+      total      = 0
+
+      job_config = bigquery.LoadJobConfig(
+          write_disposition = bigquery.WriteDisposition.WRITE_APPEND,
+          schema = [
+              bigquery.SchemaField("id",          "STRING"),
+              bigquery.SchemaField("type",        "STRING"),
+              bigquery.SchemaField("created_at",  "TIMESTAMP"),
+              bigquery.SchemaField("public",      "BOOLEAN"),
+              bigquery.SchemaField("actor_login", "STRING"),
+              bigquery.SchemaField("actor_id",    "INTEGER"),
+              bigquery.SchemaField("repo_name",   "STRING"),
+              bigquery.SchemaField("repo_id",     "INTEGER"),
+          ],
+      )
+
+      for hour in range(24):
+          url = f"https://data.gharchive.org/{date}-{hour}.json.gz"
+          print(f"[{hour:02d}:00] Downloading {url} ...")
+          try:
+              resp = requests.get(url, timeout=120)
+              if resp.status_code != 200:
+                  print(f"  Skipped: HTTP {resp.status_code}")
+                  continue
+
+              rows = []
+              with gzip.open(io.BytesIO(resp.content)) as f:
+                  for line in f:
+                      try:
+                          e = json.loads(line)
+                          rows.append({
+                              "id":          e.get("id"),
+                              "type":        e.get("type"),
+                              "created_at":  e.get("created_at"),
+                              "public":      e.get("public"),
+                              "actor_login": (e.get("actor") or {}).get("login"),
+                              "actor_id":    (e.get("actor") or {}).get("id"),
+                              "repo_name":   (e.get("repo") or {}).get("name"),
+                              "repo_id":     (e.get("repo") or {}).get("id"),
+                          })
+                      except Exception:
+                          pass
+
+              if rows:
+                  job = bq.load_table_from_json(rows, table_ref, job_config=job_config)
+                  job.result()
+                  print(f"  Loaded {len(rows):,} events")
+                  total += len(rows)
+
+          except Exception as ex:
+              print(f"  Error: {ex}")
+
+      print(f"\nDone. Total events loaded for {date}: {total:,}")
+
+triggers:
+  - id: daily_at_7am_utc
+    type: io.kestra.plugin.core.trigger.Schedule
+    cron: "0 7 * * *"
+    description: "Ingest previous day's GitHub Archive data every morning"
