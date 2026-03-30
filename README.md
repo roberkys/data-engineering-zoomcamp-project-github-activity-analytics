@@ -49,6 +49,17 @@ BigQuery: github_analytics_dwh.*
 Looker Studio Dashboard (2 tiles)
 ```
 
+## Architecture Notes
+
+**Why no GCS data lake?**
+The pipeline loads GitHub Archive data directly from the source into BigQuery, skipping a GCS staging layer.
+This is intentional: the GCP project runs on the free sandbox tier which does not support GCS bucket creation.
+Direct-to-BigQuery loading via the `load_table_from_json` API is a valid and increasingly common pattern —
+it reduces latency, eliminates an extra storage cost, and simplifies the pipeline without sacrificing reliability.
+The raw `events` table in BigQuery serves as the durable, queryable landing zone (equivalent to a data lake layer).
+
+---
+
 ## Technologies
 
 | Layer | Tool |
