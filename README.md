@@ -28,9 +28,8 @@ GH Archive (hourly JSON.gz)
         ▼
 [Kestra] 02_ingest flow (daily schedule)
   • Downloads 24 hourly files
-  • Flattens nested JSON → NDJSON
-  • Uploads to GCS (data lake)
-  • Loads via BigQuery external table
+  • Flattens nested JSON → 8-field rows
+  • Loads directly into BigQuery via load_table_from_json
         │
         ▼
 BigQuery: github_archive_raw.events
@@ -38,10 +37,10 @@ BigQuery: github_archive_raw.events
         │
         ▼
 [dbt] 03_dbt_transform flow (triggered after ingest)
-  • stg_github_events  (view)
-  • fct_daily_activity (table, partitioned)
-  • fct_event_type_distribution (table)
-  • fct_top_repos (table)
+  • stg_github_events          (view, deduplicated)
+  • fct_daily_activity         (partitioned table)
+  • fct_event_type_distribution(table)
+  • fct_top_repos              (view)
         │
         ▼
 BigQuery: github_analytics_dwh.*
@@ -54,10 +53,9 @@ Looker Studio Dashboard (2 tiles)
 
 | Layer | Tool |
 |-------|------|
-| Cloud | GCP (BigQuery + GCS) |
+| Cloud | GCP (BigQuery) |
 | IaC | Terraform |
 | Orchestration | Kestra |
-| Data Lake | Google Cloud Storage |
 | Data Warehouse | BigQuery (partitioned + clustered) |
 | Transformations | dbt (dbt-bigquery) |
 | Dashboard | Looker Studio |
@@ -73,7 +71,7 @@ The Looker Studio dashboard contains two tiles:
 - **Tile 2 – Event type distribution** (bar chart): share of each event type
   (PushEvent, PullRequestEvent, WatchEvent, etc.) across the full dataset.
 
-> Dashboard link: _add after publishing_
+> **[View the live dashboard](https://lookerstudio.google.com/reporting/bc40761b-76a5-4102-a9b2-653f9458b4c0)** (public, no login required)
 
 ---
 
@@ -176,7 +174,7 @@ docker compose up -d
 
 Open [http://localhost:8080](http://localhost:8080) and log in with `KESTRA_USERNAME` / `KESTRA_PASSWORD` from your `.env`.
 
-The `GCP_CREDS` secret is loaded automatically from `.env` at container startup — no manual UI step needed.
+The `GCP_CREDS` value is pushed to the Kestra KV store in step 5 below.
 
 ### 5 – Populate the Kestra KV store
 
@@ -186,14 +184,29 @@ Also update `GITHUB_REPO_URL` in `01_setup_kv.yaml` with your repository URL (ne
 
 ### 6 – Run a historical backfill
 
-Execute **04_backfill** with `start_date` and `end_date` to load several months of data
+Execute **04_backfill** with `start_date` and `end_date` to load historical data
 (recommended: at least 30 days for meaningful dashboard charts).
 
-Example: `2025-01-01` → `2025-02-28` loads ~2 months of GitHub activity (~50M events).
+Example: 30 days loads ~105M events (~3.5M events/day).
+
+> **Estimated times** (each day has 24 hourly files, ~3.5M events):
+>
+> | Scope | Estimated time |
+> |---|---|
+> | 1 day (daily ingest) | ~8–10 min |
+> | 7 days | ~1 hour |
+> | 30 days (backfill) | ~3–4 hours |
+>
+> The backfill flow has a 6-hour timeout. For more than 30 days, split into multiple runs.
+>
+> **BigQuery free tier note:** the sandbox plan allows ~10 GB of active storage.
+> 30 days of raw events approaches this limit — keep the backfill window within 30 days
+> to avoid quota errors.
 
 ### 7 – Run dbt transformations
 
 Execute **03_dbt_transform** manually (or wait — it triggers automatically after each daily ingest).
+dbt clones the repo, runs all models and tests in ~3–5 minutes.
 
 ### 8 – Connect Looker Studio
 
@@ -221,4 +234,4 @@ Querying a single day of data costs ~10× less than scanning the full table.
 | `stg_github_events` | View | Cleaned staging layer |
 | `fct_daily_activity` | Partitioned table | Temporal trend chart |
 | `fct_event_type_distribution` | Table | Categorical distribution chart |
-| `fct_top_repos` | Table | Most active repositories |
+| `fct_top_repos` | View | Most active repositories |
