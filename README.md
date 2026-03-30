@@ -1,7 +1,7 @@
 # GitHub Activity Analytics Dashboard
 
 An end-to-end data pipeline that ingests **GitHub Archive** event data into BigQuery,
-transforms it with dbt, and visualises it in a Looker Studio dashboard.
+transforms it with dbt, and visualizes it in a Looker Studio dashboard.
 
 Built as the final project for the [Data Engineering Zoomcamp](https://github.com/DataTalksClub/data-engineering-zoomcamp).
 
